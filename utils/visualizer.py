@@ -12,7 +12,7 @@ def get_visualization(img_list, label_list, ms_vect, ms_prob, ds=6, idx=0):
     with torch.no_grad():
         raw_img0 = _recover_img(img_list[0][idx].data)
         raw_img1 = _recover_img(img_list[1][idx].data)
-        for l in range(len(ms_vect)):
+        for l in range(len(ms_vect)-1,len(ms_vect)):
             # image
             vis_list = [raw_img0, raw_img1]
 
@@ -29,32 +29,48 @@ def get_visualization(img_list, label_list, ms_vect, ms_prob, ds=6, idx=0):
                 pred_flo = disp2flow(pred_flo)
             pred_flo = F.interpolate(pred_flo, (H, W), mode='nearest')[idx]
             max_mag2 = torch.max(torch.norm(pred_flo, 2, 0))
-
             max_mag = max(float(max_mag1), float(max_mag2))
-            vis_list.append(_flow_to_img(gt_flo, max_mag))
-            vis_list.append(_flow_to_img(pred_flo, max_mag))
+            gt=_flow_to_img(gt_flo, max_mag).cpu().numpy()
+            pred=_flow_to_img(pred_flo, max_mag).cpu().numpy()
 
+            shape = raw_img0.shape
+            gt_flo_img = raw_img0.cpu().numpy()
+            pred_flo_img = raw_img0.cpu().numpy()
+            img1=raw_img1.cpu().numpy()
+            for row in range(10, shape[1] - 10):
+                for col in range(100, shape[2] - 200):
+                    v = gt[:,row, col]
+                    gt_flo_img[:,row, col] = img1[:,int(row + v[1]), int(col + v[0])]
+                    v = pred[:,row, col]
+                    pred_flo_img[:,row, col] = img1[:,int(row + v[1]), int(col + v[0])]
+            error=cv2.absdiff(img1,pred_flo_img)
+            error=np.transpose(error,[1,2,0])
+            gt_flo_img = np.transpose(gt_flo_img,[1,2,0])
+            pred_flo_img = np.transpose(pred_flo_img, [1,2,0])
+            cv2.imshow("err",error)
+            cv2.imshow("pred",pred_flo_img)
+            cv2.waitKey(100)
+            #vis_list.append(error)
             # epe error visualization
-            epe_error = torch.norm(
-                pred_flo - gt_flo, 2, 0, keepdim=False) * valid_mask[0, :, :]
-            normalizer = max(torch.max(epe_error), 1)
-            epe_error = 1 - epe_error / normalizer
-            vis_list.append(_visualize_heat(epe_error))
+            #epe_error = torch.norm(
+            #    pred_flo - gt_flo, 2, 0, keepdim=False) * valid_mask[0, :, :]
+            #normalizer = max(torch.max(epe_error), 1)
+            #epe_error = 1 - epe_error / normalizer
+            #vis_list.append(_visualize_heat(epe_error))
 
-            # confidence map visualization
-            prob = ms_prob[l].data
-            prob = prob_gather(prob, normalize=True, dim=dim)
-            if prob.size(2) != H or prob.size(3) != W:
-                prob = F.interpolate(prob, (H, W), mode='nearest')
-            vis_list.append(
-                _visualize_heat(prob[idx].squeeze(), cv2.COLORMAP_BONE))
+
+            # prob = ms_prob[l].data
+            # prob = prob_gather(prob, normalize=True, dim=dim)
+            # if prob.size(2) != H or prob.size(3) != W:
+            #     prob = F.interpolate(prob, (H, W), mode='nearest')
+            # vis_list.append(_visualize_heat(prob[idx].squeeze(), cv2.COLORMAP_BONE))
 
             vis = torch.cat(vis_list, dim=2)
-            if l == 0:
-                ms_vis = vis
-            else:
-                ms_vis = torch.cat([ms_vis, vis], dim=1)
-
+            # if l == 0:
+            #     ms_vis = vis
+            # else:
+            #     ms_vis = torch.cat([ms_vis, vis], dim=1)
+        ms_vis = vis
         return ms_vis.unsqueeze(0)
 
 

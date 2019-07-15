@@ -24,24 +24,24 @@ cv2.setNumThreads(0)
 # Setup
 def get_parser():
     parser = ArgumentParser(description='PyTorch Implementation of HD^3')
-    parser.add_argument('--dataset_name', type=str, help='dataset name')
-    parser.add_argument('--train_root', type=str, help='training data root')
+    parser.add_argument('--dataset_name', type=str, help='dataset name',default="MPISintel")
+    parser.add_argument('--train_root', type=str ,default="/media/doing/软件/MPI-Sintel-training_images/")
     parser.add_argument('--val_root', type=str, help='validation data root')
-    parser.add_argument('--train_list', type=str, help='train list')
+    parser.add_argument('--train_list', type=str, help='train list',default="lists/MPISintel_train2.txt")
     parser.add_argument('--val_list', type=str, help='val list')
 
-    parser.add_argument('--task', type=str, help='stereo or flow')
-    parser.add_argument('--encoder', type=str, help='vgg or dlaup')
-    parser.add_argument('--decoder', type=str, help='resnet or hda')
+    parser.add_argument('--task', type=str, help='stereo or flow',default="flow")
+    parser.add_argument('--encoder', type=str, help='vgg or dlaup',default="dlaup")
+    parser.add_argument('--decoder', type=str, help='resnet or hda',default="hda")
     parser.add_argument(
-        '--context', action='store_true', default=False, help='context module')
+        '--context', action='store_true', default=True, help='context module')
 
     parser.add_argument(
         '--base_lr', type=float, default=1e-4, help='learning rate')
     parser.add_argument(
         '--epochs', type=int, default=200, help='training epochs')
     parser.add_argument(
-        '--batch_size', type=int, default=64, help='batch size')
+        '--batch_size', type=int, default=1, help='batch size')
     parser.add_argument(
         '--workers', type=int, default=16, help='data loader workers')
     parser.add_argument(
@@ -52,7 +52,7 @@ def get_parser():
     parser.add_argument(
         '--pretrain_base',
         type=str,
-        default='',
+        default="model_zoo/hd3f_chairs_things_kitti-41b15827.pth",
         help='path to pretrained base network')
     parser.add_argument(
         '--evaluate',

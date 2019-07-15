@@ -25,12 +25,12 @@ import utils.flowlib as fl
 # Setup
 def get_parser():
     parser = ArgumentParser(description='PyTorch HD^3 Evaluation')
-    parser.add_argument('--task', type=str, help='stereo or flow')
-    parser.add_argument('--encoder', type=str, help='vgg or dlaup')
-    parser.add_argument('--decoder', type=str, help='resnet, or hda')
+    parser.add_argument('--task', type=str, help='stereo or flow',default="flow")
+    parser.add_argument('--encoder', type=str, help='vgg or dlaup',default="dlaup")
+    parser.add_argument('--decoder', type=str, help='resnet, or hda',default="hda")
     parser.add_argument('--context', action='store_true', default=False)
-    parser.add_argument('--data_root', type=str, help='data root')
-    parser.add_argument('--data_list', type=str, help='data list')
+    parser.add_argument('--data_root', type=str, help='data root',default="/media/doing/软件/MPI-Sintel-training_images/")
+    parser.add_argument('--data_list', type=str, help='data list',default="lists/MPISintel_train.txt")
     parser.add_argument(
         '--batch_size',
         type=int,
@@ -40,14 +40,14 @@ def get_parser():
     )
     parser.add_argument(
         '--workers', type=int, default=8, help='data loader workers')
-    parser.add_argument('--model_path', type=str, help='evaluation model path')
-    parser.add_argument('--save_folder', type=str, help='results save folder')
+    parser.add_argument('--model_path', type=str, help='evaluation model path',default="model_zoo/hd3f_chairs_things_kitti-41b15827.pth")
+    parser.add_argument('--save_folder', type=str, help='results save folder',default="/media/doing/软件/MPI-Sintel-training_images/training")
     parser.add_argument(
         '--flow_format',
         type=str,
-        default='png',
+        default='flo',
         help='saved flow format, png or flo')
-    parser.add_argument('--evaluate', action='store_true', default=False)
+    parser.add_argument('--evaluate', action='store_true', default=True)
     return parser
 
 
@@ -78,6 +78,7 @@ def main():
     logger.info(args)
     logger.info("=> creating model ...")
 
+
     # get input image size and save name list
     # each line of data_list should contain image_0, image_1, (optional gt)
     with open(args.data_list, 'r') as f:
@@ -89,8 +90,8 @@ def main():
             for i, l in enumerate(fnames)
         ]
         names = [l.split('.')[0] for l in names]
-        input_size = cv2.imread(join(args.data_root,
-                                     fnames[0].split(' ')[0])).shape
+        img_path=join(args.data_root,fnames[0].split(' ')[0])
+        input_size = cv2.imread(img_path).shape
 
     # transform
     mean = [0.485, 0.456, 0.406]
@@ -165,12 +166,18 @@ def main():
                 img_list=resized_img_list,
                 label_list=label_list,
                 get_vect=True,
-                get_epe=args.evaluate)
+                get_epe=args.evaluate,
+                get_vis=True)
+
             scale_factor = 1 / 2**(7 - len(corr_range))
             output['vect'] = resize_dense_vector(output['vect'] * scale_factor,
                                                  img_size[0, 1],
                                                  img_size[0, 0])
-
+            vis=output['vis'].cpu().numpy()
+            vis=np.transpose(vis,(0,2,3,1))[0,:,:,:]
+            cv2.namedWindow('vis', 0)
+            cv2.imshow("vis",vis)
+            cv2.waitKey(0)
             if args.evaluate:
                 avg_epe.update(output['epe'].mean().data, img_list[0].size(0))
 
@@ -195,7 +202,6 @@ def main():
             for idx in range(curr_bs):
                 curr_idx = i * args.batch_size + idx
                 curr_vect = pred_vect[idx]
-
                 # make folders
                 vis_sub_folder = join(vis_folder, sub_folders[curr_idx])
                 vec_sub_folder = join(vec_folder, sub_folders[curr_idx])
@@ -224,6 +230,19 @@ def main():
                             (img_size[idx][1], img_size[idx][0]),
                             dtype=np.uint16)
                         fl.write_kitti_png_file(vect_fn, curr_vect, mask_blob)
+                        # imgpath0=join(args.data_root,sub_folders[curr_idx])
+                        # imgpath0 = join(imgpath0,names[curr_idx] + '.' + fn_suffix)
+                        # imgpath1 = join(args.data_root, sub_folders[curr_idx+1])
+                        # imgpath1 = join(imgpath1, names[curr_idx+1] + '.' + fn_suffix)
+                        # img_0 = cv2.imread(imgpath0)
+                        # img_1 = cv2.imread(imgpath1)
+                        # vec=curr_vect
+                        # shape=img_0.shape
+                        # for row in range(10,shape[0]-10):
+                        #     for col in range(10,shape[1]-10):
+                        #         v=vec[row,col,:]
+                        #         img_0[row,col,:]=img_1[int(row+v[1]),int(col+v[0]),:]
+                        # cv2.imwrite(vect_fn,img_0)
                     else:
                         # save flo format flow
                         fl.write_flow(curr_vect, vect_fn)
