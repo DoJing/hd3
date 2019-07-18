@@ -56,7 +56,7 @@ class HD3Data(Dataset):
 def read_gen(file_name, mode):
     ext = splitext(file_name)[-1]
     if mode == 'image':
-        assert ext in ['.png', '.jpeg', '.ppm', '.jpg']
+        assert ext in ['.png', '.jpeg', '.ppm', '.jpg','.JPG']
         return Image.open(file_name)
     elif mode == 'flow':
         assert ext in ['.flo', '.png', '.pfm']

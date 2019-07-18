@@ -21,7 +21,6 @@ from utils.utils import *
 from models.hd3_ops import *
 import utils.flowlib as fl
 
-
 # Setup
 def get_parser():
     parser = ArgumentParser(description='PyTorch HD^3 Evaluation')
@@ -29,7 +28,7 @@ def get_parser():
     parser.add_argument('--encoder', type=str, help='vgg or dlaup',default="dlaup")
     parser.add_argument('--decoder', type=str, help='resnet, or hda',default="hda")
     parser.add_argument('--context', action='store_true', default=False)
-    parser.add_argument('--data_root', type=str, help='data root',default="/media/doing/软件/MPI-Sintel-training_images/")
+    parser.add_argument('--data_root', type=str, help='data root',default="/media/doing/软件/MPI-Sintel-training_images")
     parser.add_argument('--data_list', type=str, help='data list',default="lists/MPISintel_train.txt")
     parser.add_argument(
         '--batch_size',
@@ -41,11 +40,12 @@ def get_parser():
     parser.add_argument(
         '--workers', type=int, default=8, help='data loader workers')
     parser.add_argument('--model_path', type=str, help='evaluation model path',default="model_zoo/hd3f_chairs_things_kitti-41b15827.pth")
-    parser.add_argument('--save_folder', type=str, help='results save folder',default="/media/doing/软件/MPI-Sintel-training_images/training")
+    parser.add_argument('--if_save',type=bool,help='if save the flow result',default=False)
+    parser.add_argument('--save_folder', type=str, help='results save folder',default="")
     parser.add_argument(
         '--flow_format',
         type=str,
-        default='flo',
+        default='png',
         help='saved flow format, png or flo')
     parser.add_argument('--evaluate', action='store_true', default=True)
     return parser
@@ -92,7 +92,6 @@ def main():
         names = [l.split('.')[0] for l in names]
         img_path=join(args.data_root,fnames[0].split(' ')[0])
         input_size = cv2.imread(img_path).shape
-
     # transform
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
@@ -132,11 +131,15 @@ def main():
     else:
         raise RuntimeError("=> no checkpoint found at '{}'".format(
             args.model_path))
-
-    vis_folder = os.path.join(args.save_folder, 'vis')
-    vec_folder = os.path.join(args.save_folder, 'vec')
-    check_makedirs(vis_folder)
-    check_makedirs(vec_folder)
+    if(args.if_save):
+        if(args.save_folder==""):
+            args.save_folder=args.data_root
+        vis_folder = os.path.join(args.save_folder, 'vis')
+        vec_folder = os.path.join(args.save_folder, 'vec')
+        img_folder = os.path.join(args.save_folder, 'img')
+        check_makedirs(vis_folder)
+        check_makedirs(vec_folder)
+        check_makedirs(img_folder)
 
     # start testing
     logger.info('>>>>>>>>>>>>>>>> Start Test >>>>>>>>>>>>>>>>')
@@ -149,7 +152,6 @@ def main():
     with torch.no_grad():
         for i, (img_list, label_list, img_size) in enumerate(val_loader):
             data_time.update(time.time() - end)
-
             img_size = img_size.cpu().numpy()
             img_list = [img.to(torch.device("cuda")) for img in img_list]
             label_list = [
@@ -173,11 +175,8 @@ def main():
             output['vect'] = resize_dense_vector(output['vect'] * scale_factor,
                                                  img_size[0, 1],
                                                  img_size[0, 0])
-            vis=output['vis'].cpu().numpy()
-            vis=np.transpose(vis,(0,2,3,1))[0,:,:,:]
-            cv2.namedWindow('vis', 0)
-            cv2.imshow("vis",vis)
-            cv2.waitKey(0)
+
+
             if args.evaluate:
                 avg_epe.update(output['epe'].mean().data, img_list[0].size(0))
 
@@ -194,9 +193,11 @@ def main():
                         len(val_loader),
                         data_time=data_time,
                         batch_time=batch_time))
-
+            if not args.if_save:
+                continue
             pred_vect = output['vect'].data.cpu().numpy()
             pred_vect = np.transpose(pred_vect, (0, 2, 3, 1))
+            pred_img = output['img']
             curr_bs = pred_vect.shape[0]
 
             for idx in range(curr_bs):
@@ -205,9 +206,13 @@ def main():
                 # make folders
                 vis_sub_folder = join(vis_folder, sub_folders[curr_idx])
                 vec_sub_folder = join(vec_folder, sub_folders[curr_idx])
+                img_sub_folder = join(img_folder, sub_folders[curr_idx])
                 check_makedirs(vis_sub_folder)
                 check_makedirs(vec_sub_folder)
-
+                check_makedirs(img_sub_folder)
+                # save pred img
+                img_fn = join(img_sub_folder, names[curr_idx] + '.png')
+                cv2.imwrite(img_fn,pred_img*255)
                 # save visualzation (disparity transformed to flow here)
                 vis_fn = join(vis_sub_folder, names[curr_idx] + '.png')
                 if args.task == 'flow':
@@ -221,8 +226,7 @@ def main():
                 fn_suffix = 'png'
                 if args.task == 'flow':
                     fn_suffix = args.flow_format
-                vect_fn = join(vec_sub_folder,
-                               names[curr_idx] + '.' + fn_suffix)
+                vect_fn = join(vec_sub_folder,names[curr_idx] + '.' + fn_suffix)
                 if args.task == 'flow':
                     if fn_suffix == 'png':
                         # save png format flow
@@ -230,26 +234,12 @@ def main():
                             (img_size[idx][1], img_size[idx][0]),
                             dtype=np.uint16)
                         fl.write_kitti_png_file(vect_fn, curr_vect, mask_blob)
-                        # imgpath0=join(args.data_root,sub_folders[curr_idx])
-                        # imgpath0 = join(imgpath0,names[curr_idx] + '.' + fn_suffix)
-                        # imgpath1 = join(args.data_root, sub_folders[curr_idx+1])
-                        # imgpath1 = join(imgpath1, names[curr_idx+1] + '.' + fn_suffix)
-                        # img_0 = cv2.imread(imgpath0)
-                        # img_1 = cv2.imread(imgpath1)
-                        # vec=curr_vect
-                        # shape=img_0.shape
-                        # for row in range(10,shape[0]-10):
-                        #     for col in range(10,shape[1]-10):
-                        #         v=vec[row,col,:]
-                        #         img_0[row,col,:]=img_1[int(row+v[1]),int(col+v[0]),:]
-                        # cv2.imwrite(vect_fn,img_0)
                     else:
                         # save flo format flow
                         fl.write_flow(curr_vect, vect_fn)
                 else:
                     # save disparity map
-                    cv2.imwrite(vect_fn,
-                                np.uint16(-curr_vect[:, :, 0] * 256.0))
+                    cv2.imwrite(vect_fn,np.uint16(-curr_vect[:, :, 0] * 256.0))
 
     if args.evaluate:
         logger.info('Average End Point Error {avg_epe.avg:.2f}'.format(

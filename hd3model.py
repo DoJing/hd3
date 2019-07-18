@@ -43,7 +43,7 @@ class HD3Model(nn.Module):
             result['epe'] = self.eval_epe(ms_vect[-1] * scale_factor,
                                           label_list[0])
         if get_vis:
-            result['vis'] = get_visualization(img_list, label_list, ms_vect,
+            result['img'] = get_visualization(img_list, label_list, ms_vect,
                                               ms_prob, self.ds)
 
         return result
